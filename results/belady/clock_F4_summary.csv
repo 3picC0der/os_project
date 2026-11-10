@@ -1,0 +1,3 @@
+pid,references,reads,writes,hits,faults,hit_rate,fault_rate,page_ins,eviction_writebacks,completion_flushes,clean_evictions,evictions_caused,pages_evicted,first_ref,last_ref,peak_resident,peak_ws,warning_refs
+1,12,12,0,2,10,0.16666666666666666,0.8333333333333334,10,0,0,6,6,6,0,11,4,5,0
+TOTAL,12,12,0,2,10,0.16666666666666666,0.8333333333333334,10,0,0,6,6,6,,,4,,0

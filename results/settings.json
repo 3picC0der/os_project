@@ -1,0 +1,26 @@
+{
+  "vmsim_version": "0.2.0",
+  "seed": 11,
+  "variability_seeds": [
+    11,
+    23,
+    37,
+    53,
+    71
+  ],
+  "write_prob": 0.3,
+  "frames": [
+    2,
+    3,
+    4,
+    8
+  ],
+  "window": 20,
+  "threshold": 0.5,
+  "policies": [
+    "fifo",
+    "lru",
+    "clock",
+    "opt"
+  ]
+}

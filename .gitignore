@@ -1,0 +1,13 @@
+# Agent-only context (not part of submission)
+.agent/
+CLAUDE.local.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# OS
+.DS_Store

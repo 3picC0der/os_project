@@ -1,0 +1,47 @@
+{
+  "workload": "pressure",
+  "kind": "synthetic",
+  "seed": 23,
+  "write_prob": 0.3,
+  "interleaving": "round-robin, ascending pid, exhausted processes skipped",
+  "processes": [
+    {
+      "pid": 1,
+      "refs": 150,
+      "ws_size": 3,
+      "address_space": 16,
+      "locality": 0.95,
+      "base": 0,
+      "shift_every": 75
+    },
+    {
+      "pid": 2,
+      "refs": 150,
+      "ws_size": 3,
+      "address_space": 16,
+      "locality": 0.95,
+      "base": 0,
+      "shift_every": 75
+    },
+    {
+      "pid": 3,
+      "refs": 100,
+      "ws_size": 3,
+      "address_space": 16,
+      "locality": 0.95,
+      "base": 0,
+      "shift_every": 50
+    },
+    {
+      "pid": 4,
+      "refs": 100,
+      "ws_size": 2,
+      "address_space": 16,
+      "locality": 0.95,
+      "base": 0,
+      "shift_every": 50
+    }
+  ],
+  "references": 500,
+  "generator_version": 1
+}

@@ -1,0 +1,8 @@
+{
+  "workload": "belady",
+  "kind": "fixed",
+  "seed": null,
+  "write_prob": 0.0,
+  "references": 12,
+  "generator_version": 1
+}

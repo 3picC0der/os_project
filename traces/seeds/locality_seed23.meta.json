@@ -1,0 +1,38 @@
+{
+  "workload": "locality",
+  "kind": "synthetic",
+  "seed": 23,
+  "write_prob": 0.3,
+  "interleaving": "round-robin, ascending pid, exhausted processes skipped",
+  "processes": [
+    {
+      "pid": 1,
+      "refs": 120,
+      "ws_size": 2,
+      "address_space": 16,
+      "locality": 0.95,
+      "base": 0,
+      "shift_every": null
+    },
+    {
+      "pid": 2,
+      "refs": 90,
+      "ws_size": 2,
+      "address_space": 16,
+      "locality": 0.95,
+      "base": 0,
+      "shift_every": null
+    },
+    {
+      "pid": 3,
+      "refs": 60,
+      "ws_size": 1,
+      "address_space": 16,
+      "locality": 0.95,
+      "base": 0,
+      "shift_every": null
+    }
+  ],
+  "references": 270,
+  "generator_version": 1
+}

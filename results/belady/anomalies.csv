@@ -1,0 +1,3 @@
+policy,frames_from,frames_to,faults_from,faults_to
+fifo,3,4,9,10
+clock,3,4,9,10
