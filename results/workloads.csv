@@ -1,0 +1,14 @@
+trace,command
+traces/zipf_seed11.csv,vmgen zipf -s 11 -n 4 -r 25000 -p 1000 -a 0.9 -w 0.3
+traces/zipf_seed23.csv,vmgen zipf -s 23 -n 4 -r 25000 -p 1000 -a 0.9 -w 0.3
+traces/zipf_seed47.csv,vmgen zipf -s 47 -n 4 -r 25000 -p 1000 -a 0.9 -w 0.3
+traces/shift_seed11.csv,vmgen shift -s 11 -n 4 -r 25000 -p 1000 -a 0.9 -w 0.3 -k 10
+traces/shift_seed23.csv,vmgen shift -s 23 -n 4 -r 25000 -p 1000 -a 0.9 -w 0.3 -k 10
+traces/shift_seed47.csv,vmgen shift -s 47 -n 4 -r 25000 -p 1000 -a 0.9 -w 0.3 -k 10
+traces/phase_ws3.csv,vmgen phase -p 3
+traces/phase_ws4.csv,vmgen phase -p 4
+traces/phase_ws5.csv,vmgen phase -p 5
+traces/phase_ws6.csv,vmgen phase -p 6
+traces/phase_ws8.csv,vmgen phase -p 8
+traces/phase_ws12.csv,vmgen phase -p 12
+traces/phase_ws16.csv,vmgen phase -p 16

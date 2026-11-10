@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 2 Progress Report</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  body { font-family: "Times New Roman", Times, serif; font-size: 11pt; line-height: 1.4; color: #000; background: #fff; margin: 0; }
+  .title { text-align: center; margin-bottom: 18px; }
+  .title h1 { font-size: 17pt; margin: 0 0 4px; }
+  .title p { margin: 2px 0; text-align: center; }
+  h2 { font-size: 13pt; margin: 18px 0 6px; break-after: avoid; }
+  h3 { font-size: 11pt; margin: 12px 0 4px; }
+  p { margin: 6px 0; text-align: justify; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 10pt; }
+  th, td { border: 1px solid #000; padding: 3px 6px; text-align: left; vertical-align: top; }
+  tr { break-inside: avoid; }
+  .num { text-align: right; }
+  figure { margin: 10px 0; text-align: center; break-inside: avoid; }
+  figure img { max-width: 100%; }
+  figure.shot img { width: 72%; }
+  figcaption { font-size: 10pt; margin-top: 4px; }
+  pre { font-family: Menlo, Consolas, monospace; font-size: 8pt; line-height: 1.3; text-align: left;
+        border: 1px solid #999; padding: 6px 8px; margin: 0; white-space: pre; overflow: hidden; }
+  ul { margin: 4px 0 6px 20px; padding: 0; } li { margin: 3px 0; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<div class="title">
+  <p>ICS 433 Operating Systems Lab, Phase 2 Progress Report</p>
+  <h1>Virtual Memory Management Simulator</h1>
+  <p>Replicating "FIFO can be Better than LRU" (HotOS 2023) for a shared-server page cache</p>
+  <p>Belal Shebl (202361930), Muhammad Ammar Sohail (202356790)</p>
+</div>
+
+<h2>1. Project recap</h2>
+<p>We are building a simulator for a multi-process virtual memory system. Processes share one global
+pool of physical frames, and FIFO, LRU or Clock decides which page to evict. The simulator tracks page tables,
+dirty pages, per-process working sets and fault rates. It also raises a simple thrashing warning.</p>
+<p>Changes since the proposal: following the instructor's guidance, (1) the simulator is now written in C, and
+Python is used only to run experiments and draw charts; (2) the project is anchored on a recent paper that we
+replicate; and (3) it targets one concrete use case.</p>
+<p>Reference paper: J. Yang, Z. Qiu, Y. Zhang, Y. Yue, K. V. Rashmi, "FIFO can be Better than LRU: the Power of
+Lazy Promotion and Quick Demotion", HotOS 2023 [1]. On 5,307 block and web cache traces, it finds that
+FIFO-Reinsertion (the same algorithm as 1-bit Clock and Second Chance) has a lower miss ratio than LRU, against
+common belief. In its footnote 2, the paper guesses that this may not hold for virtual-memory workloads, where
+"LRU can better adapt to sudden working set changes". The authors did not test this.</p>
+<p>Use case: the page cache of a shared server, where several processes compete for a fixed pool of frames.
+Is the cheap Clock family good enough, or does LRU win when processes change their working sets?</p>
+
+<h2>2. What has been implemented</h2>
+<p>About 75% of the system is done. All core modules work and are tested.</p>
+<table>
+  <tr><th>Module</th><th>Status</th><th>Files</th></tr>
+  <tr><td>Strict CSV trace loader (exact header, field count, positive PID, non-negative page, R/W only, no blank rows, line-numbered errors)</td><td>Done</td><td><code>src/trace.c</code></td></tr>
+  <tr><td>Simulation engine: global frame pool, lowest free frame first, (pid, page) identity, dirty bits, page-ins, eviction write-backs, completion flushes, process cleanup</td><td>Done</td><td><code>src/sim.c</code></td></tr>
+  <tr><td>Policies: FIFO, LRU, Clock (proposal rule) and FIFO-Reinsertion (the paper's variant)</td><td>Done</td><td><code>src/sim.c</code></td></tr>
+  <tr><td>Working-set windows (last 20 references per process), total demand D, thrashing warnings with an ON/OFF log</td><td>Done</td><td><code>src/sim.c</code></td></tr>
+  <tr><td>Executable invariants (<code>sim_check</code>), checked after every reference in the tests or with <code>vmsim run -c</code></td><td>Done</td><td><code>src/sim.c</code></td></tr>
+  <tr><td>Command line: <code>vmsim run</code> (per-process tables, logs) and <code>vmsim compare</code> (all policies, many frame counts, FIFO-anomaly check)</td><td>Done</td><td><code>src/main.c</code></td></tr>
+  <tr><td>Seeded workload generator: Zipf, shifting working sets, and the proposal's phase trace</td><td>Done</td><td><code>src/gen.c</code></td></tr>
+  <tr><td>Real trace: MSR Cambridge <code>hm_0</code> (3,993,316 references), converted from the paper authors' public copy</td><td>Done</td><td><code>tools/msr_to_trace.py</code></td></tr>
+  <tr><td>Unit tests: every case in the proposal's test table, plus the feedback items (529 checks, all passing)</td><td>Done</td><td><code>tests/test_sim.c</code></td></tr>
+  <tr><td>Experiment runner: seeds, tables, charts</td><td>Done</td><td><code>analysis/run_experiments.py</code></td></tr>
+  <tr><td>More real traces, design document, final report and demo</td><td>Remaining</td><td>Section 7</td></tr>
+</table>
+
+<h3>Response to the proposal feedback</h3>
+<table>
+  <tr><th>Feedback</th><th>What we did</th></tr>
+  <tr><td>1. Keep the model rules as executable invariants</td><td><code>sim_check()</code> verifies: hits + faults = references; no (pid, page) is resident twice; each frame has one owner; occupancy &le; F; finished processes own no frames; per-process counts sum to the totals; D equals the sum of active working sets; the FIFO/LRU queue length equals the number of resident pages. The tests call it after every reference, including on 20 random multi-process traces &times; 4 policies &times; 5 frame counts.</td></tr>
+  <tr><td>2. The warning is a heuristic; compare onset across working-set sizes</td><td>Labelled "heuristic" in the code, the CLI output and this report. Onset was measured for middle-phase working sets of 3, 4, 5, 6, 8, 12 and 16 pages (Fig. 4).</td></tr>
+  <tr><td>3. Independent random seeds; summarise variability</td><td>Synthetic workloads use seeds 11, 23 and 47. Tables report the mean &plusmn; sample standard deviation.</td></tr>
+  <tr><td>4. Cleanup/reuse test with the Clock hand and per-process totals</td><td>Test <code>test_cleanup_and_reuse</code>: PID 1 finishes and flushes one dirty page. Its freed frames 0 and 2 are reused in order, and the Clock hand is checked after every step (0 &rarr; 1 &rarr; 0 &rarr; 1). Per-process totals are checked, and the FIFO/LRU queues are confirmed empty.</td></tr>
+  <tr><td>5. Separate page-in, write-back and flush counts</td><td>Separate columns everywhere: <code>page-ins</code>, <code>evict-wb</code> and <code>flushes</code> in the CLI; <code>page_ins</code>, <code>evict_writebacks</code> and <code>completion_flushes</code> in every CSV and table.</td></tr>
+</table>
+
+<h2>3. System architecture</h2>
+<pre>
+  vmgen (C)  ---------------+                        +--> per-process + system tables (stdout)
+  zipf / shift / phase      |                        |
+                            v                        |
+  msr_to_trace.py ---> trace CSV ---> trace.c ---> sim.c ---> main.c (vmsim run | compare)
+  (MSR hm_0)           pid,page,op    validate,    frames, FIFO/LRU/   |
+                                      dense ids    Clock/FIFO-R,       +--> step log CSV, warning log CSV
+                                                   cleanup, windows,   +--> compare CSV + FIFO-anomaly check
+                                                   warnings, invariants          |
+                                                                                 v
+                                               run_experiments.py (Python): seeds, mean &plusmn; sd, tables, charts
+</pre>
+<ul>
+  <li>Dense ids: the loader maps every (pid, page) pair to a small integer, so the simulator uses plain arrays
+      (page table <code>where[key]</code> = frame). One run over the 4-million-reference MSR trace takes about 2 s.</li>
+  <li>One queue for FIFO and LRU: a doubly linked list of frames. Loads go to the tail and the victim is the head.
+      LRU also moves a page to the tail on every hit. All operations are O(1).</li>
+  <li>Clock and FIFO-R: a reference bit per frame plus a hand. They differ in exactly one line: whether a page
+      load sets the bit (Clock, our proposal's rule) or leaves it at 0 (FIFO-Reinsertion, the paper's rule).</li>
+</ul>
+
+<h2>4. Results so far</h2>
+<p>Workloads: Zipf (4 processes, 1,000 pages each, &alpha; = 0.9, 30% writes; a skewed workload like the paper's
+block and web traces), the real MSR hm_0 block trace [2], and shift (the same as Zipf, but each process moves its
+whole working set to new pages 10 times; a VM-like workload with sudden phase changes). The cache sizes are the
+paper's 0.1% and 10% of distinct pages, plus 1%. The metric is the paper's: the reduction of the miss (fault)
+ratio relative to FIFO.</p>
+<p>Validation against the paper: on MSR hm_0 at 0.1% of pages, our LRU fault ratio is 0.5263. The paper's
+Table 2 reports 0.5263, an exact match, so our simulator and trace conversion reproduce the paper's setup.</p>
+
+<figure><img src="../results/figures/fig1_reduction_vs_fifo.png" alt="Fault-rate reduction vs FIFO for three workloads">
+<figcaption>Figure 1. Fault-rate reduction compared with FIFO (higher is better). Error bars: sample standard
+deviation over 3 seeds (very small). MSR hm_0 is a single trace.</figcaption></figure>
+
+<table>
+  <tr><th>Workload, size</th><th class="num">FIFO</th><th class="num">LRU</th><th class="num">CLOCK</th><th class="num">FIFO-R</th><th>Best</th></tr>
+  <tr><td>Zipf, 1%</td><td class="num">0.8690</td><td class="num">0.8491</td><td class="num">0.8588</td><td class="num">0.8361</td><td>FIFO-R</td></tr>
+  <tr><td>Zipf, 10%</td><td class="num">0.5499</td><td class="num">0.4982</td><td class="num">0.5118</td><td class="num">0.4847</td><td>FIFO-R</td></tr>
+  <tr><td>MSR hm_0, 0.1%</td><td class="num">0.5463</td><td class="num">0.5263</td><td class="num">0.5297</td><td class="num">0.5227</td><td>FIFO-R</td></tr>
+  <tr><td>MSR hm_0, 10%</td><td class="num">0.3340</td><td class="num">0.3188</td><td class="num">0.3231</td><td class="num">0.3147</td><td>FIFO-R</td></tr>
+  <tr><td>Shift (VM-like), 1%</td><td class="num">0.6483</td><td class="num">0.6011</td><td class="num">0.6148</td><td class="num">0.5870</td><td>FIFO-R</td></tr>
+  <tr><td>Shift (VM-like), 10%</td><td class="num">0.2917</td><td class="num">0.2873</td><td class="num">0.2868</td><td class="num">0.2923</td><td>CLOCK &asymp; LRU</td></tr>
+</table>
+<p>Table 1. Mean fault ratio over seeds 11, 23 and 47 (sd &le; 0.0017). The full tables, with page-ins, eviction
+write-backs and completion flushes, are in <code>results/results.md</code>.</p>
+
+<h3>Findings</h3>
+<ul>
+  <li>Replicated: FIFO-Reinsertion beats LRU on all Zipf runs (9 of 9) and on MSR hm_0 at every size, and FIFO is
+      the worst policy. This matches the paper's main claim.</li>
+  <li>New finding, one design detail decides the result: our proposal's Clock (a load sets the reference bit) loses
+      to LRU on every Zipf and MSR run, while FIFO-R (a load leaves the bit at 0) wins. With the bit cleared, a page
+      that is never reused is evicted on the hand's first pass. The paper calls this "quick demotion".</li>
+  <li>Footnote 2 tested: with sudden working-set changes and a large cache (10%), FIFO-R loses its advantage. It is
+      worse than LRU in 3 of 3 seeds and even slightly worse than FIFO, while LRU and Clock adapt better. This
+      supports the paper's guess for VM-like workloads, but only at the large cache size. At 0.1% and 1%, FIFO-R
+      still wins.</li>
+  <li>Write traffic: on shift at 10%, FIFO-R has the most page-ins but the fewest eviction write-backs (9,025 vs.
+      9,172 for LRU). Fault counts alone do not tell the whole story.</li>
+</ul>
+
+<figure><img src="../results/figures/fig2_msr_hm0_fault_rate.png" alt="MSR hm_0 fault rate vs cache size" style="width:62%">
+<figcaption>Figure 2. MSR hm_0 fault rate vs cache size. The &times; marks the paper's LRU value (Table 2 of [1]).</figcaption></figure>
+
+<h3>Thrashing warning (simulation heuristic)</h3>
+<p>The warning is a heuristic for this model, not a real OS thrashing detector. On the proposal's changing-locality
+trace (F = 4), there is no warning in phase 1. The warning turns on during the 8-page phase and clears 13 references
+into phase 3, before the required 20 (Fig. 3). Across middle-phase working-set sizes (Fig. 4), there is never a
+warning while D &le; F (3 or 4 pages). Above that, onset is 12 references for FIFO, LRU and Clock. Because a cyclic
+pattern faults on every reference, the delay is set by the 20-reference window, not by the working-set size. FIFO-R
+is slightly later at 5 and 6 pages. It evicts newly loaded pages first, so pages 0 and 1, which were hit in phase 1,
+stay resident longer and give a few extra hits.</p>
+<figure><img src="../results/figures/fig3_phase_timeline.png" alt="Phase workload timeline" style="width:72%">
+<figcaption>Figure 3. Working-set size and window fault rate (LRU, F = 4). Shaded: warning on.</figcaption></figure>
+<figure><img src="../results/figures/fig4_warning_onset.png" alt="Warning onset vs working-set size" style="width:58%">
+<figcaption>Figure 4. References into phase 2 until the warning turns on.</figcaption></figure>
+
+<!-- Each screenshot slot shows docs/screenshots/NN_*.png if the file exists,
+     otherwise the captured terminal text below it. -->
+<h2>5. Screenshots of the working system</h2>
+
+<figure class="shot"><img src="screenshots/01_build_and_test.png" alt="" onerror="this.nextElementSibling.hidden=false; this.remove()"><pre hidden>$ make clean &amp;&amp; make &amp;&amp; make test
+...
+cleanup, frame reuse and Clock hand (feedback item 4)
+...
+changing-locality workload
+    FIFO   first warning at step 92 (12 refs into phase 2)
+    LRU    first warning at step 92 (12 refs into phase 2)
+    CLOCK  first warning at step 92 (12 refs into phase 2)
+    FIFO-R first warning at step 92 (12 refs into phase 2)
+random traces, invariants after every reference
+
+529 checks, 0 failed</pre>
+<figcaption>Figure 5. End of <code>make test</code>: all 529 checks pass. The loader messages are expected, because those tests feed it invalid files on purpose.</figcaption></figure>
+
+<figure class="shot"><img src="screenshots/02_msr_validation.png" alt="" onerror="this.nextElementSibling.hidden=false; this.remove()"><pre hidden>$ ./bin/vmsim run -p lru -f 0.1% data/msr_hm_0.csv
+policy LRU, 439 frames, 3993316 references, 1 processes, 439187 distinct pages
+
+   pid      refs      hits    faults   fault%  page-ins  evict-wb  flushes  first-warn
+     1   3993316   1891574   2101742   52.63%   2101742         0        0           -
+   all   3993316   1891574   2101742   52.63%   2101742         0        0           -
+
+frame utilization: mean 1.000, peak 1.000
+thrashing warning (heuristic): on for 0 of 3993316 steps</pre>
+<figcaption>Figure 6. <code>vmsim run -p lru -f 0.1% data/msr_hm_0.csv</code>: LRU on the real MSR hm_0 trace gives 52.63%, the paper's Table 2 value.</figcaption></figure>
+
+<figure class="shot"><img src="screenshots/03_zipf_run.png" alt="" onerror="this.nextElementSibling.hidden=false; this.remove()"><pre hidden>$ ./bin/vmsim run -p lru -f 400 traces/zipf_seed11.csv
+policy LRU, 400 frames, 81250 references, 4 processes, 3979 distinct pages
+
+   pid      refs      hits    faults   fault%  page-ins  evict-wb  flushes  first-warn
+     1     25000     13466     11534   46.14%     11534      4231      225           -
+     2     21875     10983     10892   49.79%     10892      3915       89           -
+     3     18750      9065      9685   51.65%      9685      3457       57           -
+     4     15625      7432      8193   52.44%      8193      2852       43           -
+   all     81250     40946     40304   49.60%     40304     14455      414           -
+
+frame utilization: mean 0.993, peak 1.000
+thrashing warning (heuristic): on for 0 of 81250 steps</pre>
+<figcaption>Figure 7. <code>vmsim run -p lru -f 400 traces/zipf_seed11.csv</code>: four processes sharing 400 frames, with per-process page-ins, eviction write-backs and completion flushes.</figcaption></figure>
+
+<figure class="shot"><img src="screenshots/04_thrashing_warning.png" alt="" onerror="this.nextElementSibling.hidden=false; this.remove()"><pre hidden>$ ./bin/vmsim run -p clock -f 4 traces/phase_ws8.csv
+policy CLOCK, 4 frames, 320 references, 1 processes, 8 distinct pages
+
+   pid      refs      hits    faults   fault%  page-ins  evict-wb  flushes  first-warn
+     1       320       158       162   50.62%       162         0        0          92
+   all       320       158       162   50.62%       162         0        0          92
+
+frame utilization: mean 0.870, peak 1.000
+thrashing warning (heuristic): on for 161 of 320 steps</pre>
+<figcaption>Figure 8. <code>vmsim run -p clock -f 4 traces/phase_ws8.csv</code>: on the changing-locality trace the thrashing warning first turns on at step 92.</figcaption></figure>
+
+<figure class="shot"><img src="screenshots/05_anomaly_and_errors.png" alt="" onerror="this.nextElementSibling.hidden=false; this.remove()"><pre hidden>$ ./bin/vmsim compare traces/belady.csv 3,4
+FIFO anomaly: 3 frames -> 9 faults, 4 frames -> 10 faults
+policy,frames,refs,hits,faults,fault_rate,page_ins,evict_writebacks,completion_flushes,...
+FIFO,3,12,3,9,0.750000,9,0,0,...
+FIFO,4,12,2,10,0.833333,10,0,0,...
+...
+$ ./bin/vmsim run -p lru -f 0 traces/belady.csv
+invalid frame count '0': must be a positive integer or a percentage
+$ ./bin/vmsim run -p lru -f 4 bad.csv
+bad.csv:3: op must be R or W</pre>
+<figcaption>Figure 9. <code>vmsim compare traces/belady.csv 3,4</code> detects Belady's FIFO anomaly; a zero frame count and a bad trace line are rejected with clear messages.</figcaption></figure>
+
+<h2>6. Challenges faced</h2>
+<ul>
+  <li>Switching from Python to C. The proposal planned Python. Rewriting in C meant handling memory and data
+      structures by hand. We kept the code small: four C files, plain arrays and one linked list.</li>
+  <li>Scale of the real trace. MSR hm_0 has 4 million references and 439,187 distinct pages. A linear search for the
+      oldest or least recently used page would cost up to 44,000 steps per fault, and there are more than 2 million
+      faults. We designed for this from the start with an O(1) linked-list queue and dense page ids.</li>
+  <li>"Clock" is not one algorithm. Our first Clock (the proposal's rule: a load sets the bit) did not reproduce the
+      paper. Reading the paper closely showed that its FIFO-Reinsertion only keeps pages that were hit. We added it as
+      a fourth policy and report both. This turned out to be our most interesting result.</li>
+  <li>Pinning down rules. The hand position after inserting into a freed frame was ambiguous. We defined it as
+      "the frame after the inserted one" and test it explicitly.</li>
+  <li>The real trace has no read/write flag. The authors' copy of MSR hm_0 does not mark reads and writes, so that
+      trace is read-only and has no write-backs. The synthetic traces use 30% writes.</li>
+  <li>Smaller scale than the paper. We use 1 real trace and 3 synthetic seeds, not 5,307 traces. We replicate the
+      direction of the result, not the paper's exact percentages.</li>
+</ul>
+
+<h2>7. Plan for completing the remaining work</h2>
+<table>
+  <tr><th>Task</th><th style="width:24%">Owner</th></tr>
+  <tr><td>Add more MSR Cambridge traces (e.g. prn_0, proj_0, web_2, usr_2) to report the paper's "fraction of traces where FIFO-R beats LRU"</td><td>Belal Shebl</td></tr>
+  <tr><td>Extend the footnote-2 study: vary how often working sets shift and the cache size, and find where LRU starts to win</td><td>Muhammad Ammar Sohail</td></tr>
+  <tr><td>Optional: configurable window and threshold; a multi-process pressure sweep (number of processes vs. fixed F)</td><td>Muhammad Ammar Sohail</td></tr>
+  <tr><td>Design document and test report (expected vs. actual for every test case), code review and cleanup</td><td>Belal Shebl</td></tr>
+  <tr><td>Final report, slides and live demo using the saved traces</td><td>Both</td></tr>
+</table>
+
+<h2>References</h2>
+<p>[1] J. Yang, Z. Qiu, Y. Zhang, Y. Yue, K. V. Rashmi. FIFO can be Better than LRU: the Power of Lazy Promotion and
+Quick Demotion. HotOS '23, pp. 70&ndash;79, 2023. doi:10.1145/3593856.3595887<br>
+[2] D. Narayanan, A. Donnelly, A. Rowstron. MSR Cambridge traces (SNIA IOTTA trace set 388), 2007. Copy used:
+ftp.pdl.cmu.edu/pub/datasets/twemcacheWorkload/cacheDatasets/msr/<br>
+[3] P. J. Denning. The working set model for program behavior. Communications of the ACM 11(5):323&ndash;333, 1968.<br>
+[4] L. A. Belady. A study of replacement algorithms for a virtual-storage computer. IBM Systems Journal 5(2):78&ndash;101, 1966.</p>
+
+</body>
+</html>

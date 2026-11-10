@@ -1,0 +1,1 @@
+belady (seed -): FIFO anomaly: 3 frames -> 9 faults, 4 frames -> 10 faults
