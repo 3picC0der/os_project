@@ -128,11 +128,16 @@ write-backs and completion flushes, are in <code>results/results.md</code>.</p>
 <ul>
   <li>Replicated: FIFO-Reinsertion beats LRU on all Zipf runs (9 of 9) and on MSR hm_0 at every size, and FIFO is
       the worst policy. This matches the paper's main claim.</li>
-  <li>New finding, one design detail decides the result: our proposal's Clock (a load sets the reference bit) loses
-      to LRU on every Zipf and MSR run, while FIFO-R (a load leaves the bit at 0) wins. With the bit cleared, a page
-      that is never reused is evicted on the hand's first pass. The paper calls this "quick demotion".</li>
+  <li>New finding, "Clock" means two things and that one detail decides the result. Our proposal's Clock follows
+      the operating-system convention: the access that brings a page in also sets its reference bit, so a load sets
+      the bit. The paper follows the caching convention, where a new object starts with the bit at 0. Its footnote 1
+      notes that FIFO-Reinsertion, 1-bit CLOCK and Second Chance are the same algorithm, so the paper's CLOCK is our
+      FIFO-R. The OS version loses to LRU on every Zipf and MSR run, while the cache version (FIFO-R) wins. With the
+      bit at 0, a page that is never reused is evicted on the hand's first pass. The paper calls this "quick
+      demotion".</li>
   <li>Footnote 2 tested: with sudden working-set changes and a large cache (10%), FIFO-R loses its advantage. It is
-      worse than LRU in 3 of 3 seeds and even slightly worse than FIFO, while LRU and Clock adapt better. This
+      worse than LRU in 3 of 3 seeds and about the same as FIFO (0.2923 vs. 0.2917, a gap smaller than the spread
+      between seeds), while LRU and Clock adapt better. This
       supports the paper's guess for VM-like workloads, but only at the large cache size. At 0.1% and 1%, FIFO-R
       still wins.</li>
   <li>Write traffic: on shift at 10%, FIFO-R has the most page-ins but the fewest eviction write-backs (9,025 vs.
@@ -150,6 +155,10 @@ warning while D &le; F (3 or 4 pages). Above that, onset is 12 references for FI
 pattern faults on every reference, the delay is set by the 20-reference window, not by the working-set size. FIFO-R
 is slightly later at 5 and 6 pages. It evicts newly loaded pages first, so pages 0 and 1, which were hit in phase 1,
 stay resident longer and give a few extra hits.</p>
+<p>The rule also has a built-in limit. A working set is counted over the last 20 references, so D can never be more
+than 20 times the number of active processes, and with at least that many frames the warning cannot turn on. This is
+why the MSR runs (1 process, at least 132 frames), the 10% runs and shift at 1% show no warning steps: there, zero
+warnings means the rule could not fire, not that there was no thrashing.</p>
 <figure><img src="../results/figures/fig3_phase_timeline.png" alt="Phase workload timeline" style="width:72%">
 <figcaption>Figure 3. Working-set size and window fault rate (LRU, F = 4). Shaded: warning on.</figcaption></figure>
 <figure><img src="../results/figures/fig4_warning_onset.png" alt="Warning onset vs working-set size" style="width:58%">
@@ -228,9 +237,10 @@ bad.csv:3: op must be R or W</pre>
   <li>Scale of the real trace. MSR hm_0 has 4 million references and 439,187 distinct pages. A linear search for the
       oldest or least recently used page would cost up to 44,000 steps per fault, and there are more than 2 million
       faults. We designed for this from the start with an O(1) linked-list queue and dense page ids.</li>
-  <li>"Clock" is not one algorithm. Our first Clock (the proposal's rule: a load sets the bit) did not reproduce the
-      paper. Reading the paper closely showed that its FIFO-Reinsertion only keeps pages that were hit. We added it as
-      a fourth policy and report both. This turned out to be our most interesting result.</li>
+  <li>Two versions of Clock. Our first Clock used the proposal's rule (a load sets the bit), which is the usual
+      operating-system version, and its results did not match the paper's. Reading the paper closely showed that its
+      FIFO-Reinsertion is the caching version, which only keeps pages that were hit. We added it as a fourth policy
+      and report both. This turned out to be our most interesting result.</li>
   <li>Pinning down rules. The hand position after inserting into a freed frame was ambiguous. We defined it as
       "the frame after the inserted one" and test it explicitly.</li>
   <li>The real trace has no read/write flag. The authors' copy of MSR hm_0 does not mark reads and writes, so that
